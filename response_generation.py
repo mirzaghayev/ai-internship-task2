@@ -1,37 +1,29 @@
-import os
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+from retrieval_prompt_setup import setup_retrieval_and_prompt
+from rag_utils import call_llm
 
-from pypdf import PdfReader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
 
-def run_rag_with_sources(file_path, query):
-    reader = PdfReader(file_path)
-    raw_text = ""
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            raw_text += text + "\n"
-            
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
-    document_chunks = splitter.create_documents([raw_text])
-    
-    embeddings_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vector_store = FAISS.from_documents(document_chunks, embeddings_model)
-    
-    
-    retrieved_docs = vector_store.similarity_search_with_score(query, k=2)
-    
+def run_rag_with_sources(file_path, query, k=3):
+    retrieved_docs, messages = setup_retrieval_and_prompt(file_path, query, k=k)
+
+    # the actual generation step — this was missing before
+    system_prompt = messages[0]["content"]
+    user_prompt = messages[1]["content"]
+    answer = call_llm(user_prompt, system_prompt)
+
     print(f"Query: {query}\n")
-    print("--- GENERATED RESPONSE & SOURCES ---")
-    
-    for i, (doc, score) in enumerate(retrieved_docs):
-        print(f"\n[Source {i+1}] (Relevance Score: {score:.4f})")
-        print(f"Content snippet: {doc.page_content.strip()}")
+    print("--- GENERATED RESPONSE ---")
+    print(answer)
 
-#test bolumu
+    print("\n--- SOURCES USED ---")
+    for i, doc in enumerate(retrieved_docs, start=1):
+        page = doc.metadata.get("page", "?")
+        snippet = doc.page_content.strip().replace("\n", " ")[:120]
+        print(f"[Chunk {i}] page {page}: {snippet}...")
+
+    return answer
+
+
+# test bolumu
 if __name__ == "__main__":
     pdf_path = "test_file.pdf"
     query = "Who is Gregor Samsa?"

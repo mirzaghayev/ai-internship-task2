@@ -8,3 +8,4 @@ Lazimi yuklenmeliler
 pip install pypdf langchain-text-splitters
 pip install langchain-huggingface sentence-transformers
 pip install faiss-cpu
+pip install pymupdf
